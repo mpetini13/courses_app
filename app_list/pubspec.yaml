@@ -32,10 +32,23 @@ flutter_launcher_icons:
 flutter:
   uses-material-design: true
   assets:
-    - assets/plats.csv
+    - assets/recettes.csv
     - assets/Images/
     - assets/Images/Pizza.jpg
     - assets/Images/Ratatouille.jpg
     - assets/Images/Porc_caramelise.jpg
     - assets/Images/Hamburger_frites.jpg
     - assets/Images/quiche.jpg
+    - assets/Images/cordon_bleu.jpg
+    - assets/Images/Couscous_perle.jpg
+    - assets/Images/curry_katsu.jpg
+    - assets/Images/pates_pesto.jpg
+    - assets/Images/pates_saucisseitalienne.jpg
+    - assets/Images/chicken_finger.jpg
+    - assets/Images/Moussaka.jpg
+    - assets/Images/risotto_chorizo.jpg
+    - assets/Images/samossa.jpg
+    - assets/Images/curry_vert.jpg
+    - assets/Images/pates_ail.jpg
+    - assets/Images/pain_saucisse.jpg
+    - assets/Images/pates_vodka.jpg

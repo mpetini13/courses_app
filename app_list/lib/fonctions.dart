@@ -4,7 +4,7 @@ import 'package:csv/csv.dart'; //permet de convertir csv en list
 
 Future<List<Recette>> chargerRecettes() async {
   try {
-    final csvString = await rootBundle.loadString('assets/plats.csv');
+    final csvString = await rootBundle.loadString('assets/recettes.csv');
     print('CSV chargé : ${csvString.length} caractères');
     print('Premières lignes : ${csvString.split('\n').take(3).join('\n')}');
 
