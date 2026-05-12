@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'class.dart';
 
 enum TriMode { categorie, alphabetique, nonCoches }
@@ -22,6 +23,26 @@ class ListeCoursesPage extends StatefulWidget {
 class _ListeCoursesPageState extends State<ListeCoursesPage> {
   Set<String> _dansLeCaddie = {};
   TriMode _triMode = TriMode.categorie;
+
+  static const _kCaddieKey = 'caddie_coches';
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerCaddie();
+  }
+
+  Future<void> _chargerCaddie() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _dansLeCaddie = (prefs.getStringList(_kCaddieKey) ?? []).toSet();
+    });
+  }
+
+  Future<void> _sauvegarderCaddie() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_kCaddieKey, _dansLeCaddie.toList());
+  }
 
   Map<String, Map<String, dynamic>> _agreger() {
     Map<String, Map<String, dynamic>> agregat = {};
@@ -350,6 +371,7 @@ class _ListeCoursesPageState extends State<ListeCoursesPage> {
             _dansLeCaddie.add(cle);
           }
         });
+        _sauvegarderCaddie();
       },
     );
   }

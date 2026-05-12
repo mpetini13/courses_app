@@ -18,7 +18,7 @@ Future<List<Recette>> chargerRecettes() async {
     Map<String, List<Ingredient>> recettesMap = {};
     Map<String, String> imagesMap = {};
 
-    for (var row in csvRows.skip(1)) {  // <-- retire le .skip(1), ton CSV n'a pas de header !
+    for (var row in csvRows.skip(1)) {
       if (row.length < 6) continue;
 
       final plat = row[0].toString().trim();
