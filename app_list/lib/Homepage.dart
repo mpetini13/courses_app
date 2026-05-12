@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'dart:math';
 import 'class.dart';
 import 'ListeCoursesPage.dart';
 import 'package:flutter/services.dart';
+
+enum TriRecettes { defaut, az, za, selectionnes }
+enum VueMode { grille, liste }
 
 class HomePage extends StatefulWidget {
   final List<Recette> recettes;
@@ -21,6 +25,9 @@ class _HomePageState extends State<HomePage> {
   int _nbPersonnes(String nomPlat) => _nbPersonnesParPlat[nomPlat] ?? 2;
   final TextEditingController _rechercheController = TextEditingController();
   final TextEditingController _autreController = TextEditingController();
+  TriRecettes _tri = TriRecettes.defaut;
+  VueMode _vue = VueMode.grille;
+  List<Recette>? _ordreAleatoire;
 
   @override
   void initState() {
@@ -54,6 +61,38 @@ class _HomePageState extends State<HomePage> {
       final nbPersonnesJson = prefs.getString('nbPersonnesParPlat') ?? '{}';
       _nbPersonnesParPlat = Map<String, int>.from(jsonDecode(nbPersonnesJson));
     });
+  }
+
+  List<Recette> _appliquerTri(List<Recette> recettes) {
+    switch (_tri) {
+      case TriRecettes.az:
+        return [...recettes]..sort((a, b) => a.nom.compareTo(b.nom));
+      case TriRecettes.za:
+        return [...recettes]..sort((a, b) => b.nom.compareTo(a.nom));
+      case TriRecettes.selectionnes:
+        return [...recettes]..sort((a, b) {
+            final aNbCoches = a.ingredients.where((ing) => _ingredientsCoches.contains('${a.nom}__${ing.nom}')).length;
+            final bNbCoches = b.ingredients.where((ing) => _ingredientsCoches.contains('${b.nom}__${ing.nom}')).length;
+            return bNbCoches.compareTo(aNbCoches);
+          });
+      case TriRecettes.defaut:
+        return _ordreAleatoire ?? recettes;
+    }
+  }
+
+  void _randomizer(List<Recette> recettes) {
+    final shuffled = [...recettes]..shuffle(Random());
+    setState(() {
+      _ordreAleatoire = shuffled;
+      _tri = TriRecettes.defaut;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Plats mélangés aléatoirement !'),
+        duration: Duration(seconds: 1),
+        backgroundColor: Colors.orange,
+      ),
+    );
   }
 
   void _toggleIngredient(String cle) {
@@ -382,9 +421,9 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final nbCoches = _ingredientsCoches.length;
-    final recettesFiltrees = widget.recettes
-        .where((r) => r.nom.toLowerCase().contains(_recherche))
-        .toList();
+    final recettesFiltrees = _appliquerTri(
+      widget.recettes.where((r) => r.nom.toLowerCase().contains(_recherche)).toList(),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -392,13 +431,16 @@ class _HomePageState extends State<HomePage> {
         backgroundColor: Colors.orange,
         foregroundColor: Colors.white,
         actions: [
-          // Sélecteur nombre de personnes
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.only(right: 4),
+          IconButton(
+            icon: Icon(
+              _vue == VueMode.grille ? Icons.view_list : Icons.grid_view,
+              color: Colors.white,
             ),
+            tooltip: _vue == VueMode.grille ? 'Vue liste' : 'Vue grille',
+            onPressed: () => setState(() {
+              _vue = _vue == VueMode.grille ? VueMode.liste : VueMode.grille;
+            }),
           ),
-          // Bouton tout décocher
           if (nbCoches > 0 || _autresArticles.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.refresh, color: Colors.white),
@@ -438,6 +480,51 @@ class _HomePageState extends State<HomePage> {
                   borderSide: BorderSide.none,
                 ),
               ),
+            ),
+          ),
+
+          // Barre tri + randomize
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => _randomizer(widget.recettes),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.orange,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.shuffle, size: 14, color: Colors.white),
+                        SizedBox(width: 4),
+                        Text('Aléatoire', style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _TriChipHome(
+                  label: 'A→Z',
+                  selected: _tri == TriRecettes.az,
+                  onTap: () => setState(() => _tri = TriRecettes.az),
+                ),
+                const SizedBox(width: 6),
+                _TriChipHome(
+                  label: 'Z→A',
+                  selected: _tri == TriRecettes.za,
+                  onTap: () => setState(() => _tri = TriRecettes.za),
+                ),
+                const SizedBox(width: 6),
+                _TriChipHome(
+                  label: 'Sélectionnés',
+                  selected: _tri == TriRecettes.selectionnes,
+                  onTap: () => setState(() => _tri = TriRecettes.selectionnes),
+                ),
+              ],
             ),
           ),
 
@@ -533,96 +620,121 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
 
-          // Grille des recettes
+          // Recettes : grille ou liste
           Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 4),
-              gridDelegate:
-              const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-                childAspectRatio: 0.75,
-              ),
-              itemCount: recettesFiltrees.length,
-              itemBuilder: (context, index) {
-                final recette = recettesFiltrees[index];
-                final nbCochesRecette = recette.ingredients
-                    .where((ing) => _ingredientsCoches
-                    .contains('${recette.nom}__${ing.nom}'))
-                    .length;
-
-                return GestureDetector(
-                  onTap: () => _showIngredients(context, recette),
-                  child: Card(
-                    margin: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                    clipBehavior: Clip.antiAlias,
-                    child: Column(
-                      children: [
-                        Container(
-                          color: nbCochesRecette > 0
-                              ? Colors.orange.shade700
-                              : Colors.grey.shade400,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 8),
-                          child: Row(
+            child: _vue == VueMode.grille
+                ? GridView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                      childAspectRatio: 0.75,
+                    ),
+                    itemCount: recettesFiltrees.length,
+                    itemBuilder: (context, index) {
+                      final recette = recettesFiltrees[index];
+                      final nbCochesRecette = recette.ingredients
+                          .where((ing) => _ingredientsCoches.contains('${recette.nom}__${ing.nom}'))
+                          .length;
+                      return GestureDetector(
+                        onTap: () => _showIngredients(context, recette),
+                        child: Card(
+                          margin: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          clipBehavior: Clip.antiAlias,
+                          child: Column(
                             children: [
-                              Expanded(
-                                child: Text(
-                                  recette.nom,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
+                              Container(
+                                color: nbCochesRecette > 0 ? Colors.orange.shade700 : Colors.grey.shade400,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        recette.nom,
+                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (nbCochesRecette > 0)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
+                                        child: Text(
+                                          '$nbCochesRecette',
+                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.orange.shade700),
+                                        ),
+                                      ),
+                                    const SizedBox(width: 4),
+                                    const Icon(Icons.expand_more, color: Colors.white, size: 18),
+                                  ],
                                 ),
                               ),
-                              if (nbCochesRecette > 0)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius:
-                                    BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    '$nbCochesRecette',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.orange.shade700,
-                                    ),
+                              Expanded(
+                                child: Image.asset(
+                                  recette.image,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    color: Colors.orange.shade50,
+                                    child: const Icon(Icons.restaurant, size: 36, color: Colors.orange),
                                   ),
                                 ),
-                              const SizedBox(width: 4),
-                              const Icon(Icons.expand_more,
-                                  color: Colors.white, size: 18),
+                              ),
                             ],
                           ),
                         ),
-                        Expanded(
-                          child: Image.asset(
-                            recette.image,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: Colors.orange.shade50,
-                              child: const Icon(Icons.restaurant,
-                                  size: 36, color: Colors.orange),
+                      );
+                    },
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    itemCount: recettesFiltrees.length,
+                    itemBuilder: (context, index) {
+                      final recette = recettesFiltrees[index];
+                      final nbCochesRecette = recette.ingredients
+                          .where((ing) => _ingredientsCoches.contains('${recette.nom}__${ing.nom}'))
+                          .length;
+                      final total = recette.ingredients.length;
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        child: ListTile(
+                          onTap: () => _showIngredients(context, recette),
+                          leading: Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: nbCochesRecette > 0 ? Colors.orange.shade700 : Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: nbCochesRecette > 0
+                                ? Center(
+                                    child: Text(
+                                      '$nbCochesRecette',
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
+                                    ),
+                                  )
+                                : const Icon(Icons.restaurant, color: Colors.white, size: 20),
+                          ),
+                          title: Text(
+                            recette.nom,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: nbCochesRecette > 0 ? Colors.black87 : Colors.grey.shade700,
                             ),
                           ),
+                          subtitle: Text(
+                            '$total ingrédient${total > 1 ? 's' : ''}',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                          ),
+                          trailing: const Icon(Icons.chevron_right, color: Colors.grey),
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
 
           // Barre du bas
@@ -703,6 +815,38 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TriChipHome extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _TriChipHome({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? Colors.orange.shade100 : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? Colors.orange : Colors.grey.shade300),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: selected ? Colors.orange.shade800 : Colors.grey.shade600,
+          ),
+        ),
       ),
     );
   }
