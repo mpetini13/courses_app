@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'class.dart';
 
@@ -77,29 +79,95 @@ class _ListeCoursesPageState extends State<ListeCoursesPage> {
     return groupes;
   }
 
-  String _construireTextePartage(List<Map<String, dynamic>> items) {
-    final buffer = StringBuffer('🛒 Ma liste de courses\n\n');
-    if (_triMode == TriMode.categorie) {
-      final groupes = _grouperParCategorie(items);
-      for (final cat in groupes.keys.toList()..sort()) {
-        buffer.writeln('── $cat ──');
-        for (final item in groupes[cat]!) {
-          final q = item['quantite'] as double;
-          final qStr =
-          q % 1 == 0 ? q.toInt().toString() : q.toStringAsFixed(1);
-          buffer.writeln('  • ${item['nom']} — $qStr ${item['unite']}');
-        }
-        buffer.writeln();
-      }
-    } else {
-      for (final item in items) {
+  String _genererHtml(List<Map<String, dynamic>> items) {
+    final groupes = _grouperParCategorie(items);
+    final categories = groupes.keys.toList()..sort();
+
+    final itemsHtml = StringBuffer();
+    for (final cat in categories) {
+      itemsHtml.writeln('<div class="cat"><span class="cat-label">$cat</span></div>');
+      for (final item in groupes[cat]!) {
         final q = item['quantite'] as double;
-        final qStr =
-        q % 1 == 0 ? q.toInt().toString() : q.toStringAsFixed(1);
-        buffer.writeln('• ${item['nom']} — $qStr ${item['unite']}');
+        final qStr = q % 1 == 0 ? q.toInt().toString() : q.toStringAsFixed(1);
+        final id = '${item['nom']}_$cat'.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+        itemsHtml.writeln('''
+          <label class="item" for="$id">
+            <input type="checkbox" id="$id" onchange="save()">
+            <span class="nom">${item['nom']}</span>
+            <span class="qty">$qStr ${item['unite']}</span>
+          </label>''');
       }
     }
-    return buffer.toString();
+
+    final plats = widget.recettes.map((r) => r.nom).where((n) => n != 'Autres').join(', ');
+
+    return '''<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Liste de courses</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, sans-serif; background: #f9f9f9; color: #222; max-width: 480px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 22px; font-weight: 700; color: #e65100; margin-bottom: 4px; }
+    .plats { font-size: 12px; color: #888; margin-bottom: 20px; }
+    .progress { background: #ffe0b2; border-radius: 6px; height: 8px; margin-bottom: 20px; overflow: hidden; }
+    .progress-bar { background: #ff6f00; height: 100%; border-radius: 6px; transition: width 0.3s; }
+    .progress-label { font-size: 12px; color: #888; margin-bottom: 6px; text-align: right; }
+    .cat { margin-top: 18px; margin-bottom: 6px; }
+    .cat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #aaa; }
+    .item { display: flex; align-items: center; background: #fff; border-radius: 12px; padding: 12px 14px; margin-bottom: 6px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.06); transition: opacity .2s; }
+    .item input { display: none; }
+    .item::before { content: ""; width: 22px; height: 22px; border: 2px solid #ddd; border-radius: 50%; margin-right: 12px; flex-shrink: 0; transition: all .2s; }
+    .item.done { opacity: 0.45; }
+    .item.done::before { background: #4caf50; border-color: #4caf50; content: "✓"; color: white; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+    .nom { flex: 1; font-size: 15px; }
+    .qty { font-size: 13px; color: #aaa; margin-left: 8px; }
+    .reset { display: block; margin-top: 24px; text-align: center; font-size: 13px; color: #ff6f00; background: none; border: 1px solid #ff6f00; border-radius: 10px; padding: 10px; cursor: pointer; width: 100%; }
+  </style>
+</head>
+<body>
+  <h1>🛒 Liste de courses</h1>
+  <p class="plats">$plats</p>
+  <p class="progress-label" id="lbl"></p>
+  <div class="progress"><div class="progress-bar" id="bar"></div></div>
+  <div id="liste">$itemsHtml</div>
+  <button class="reset" onclick="reset()">Tout décocher</button>
+  <script>
+    const KEY = 'courses_v1';
+    function ids() { return [...document.querySelectorAll('input[type=checkbox]')].map(i => i.id); }
+    function save() {
+      const checked = [...document.querySelectorAll('input:checked')].map(i => i.id);
+      localStorage.setItem(KEY, JSON.stringify(checked));
+      update();
+    }
+    function load() {
+      const checked = JSON.parse(localStorage.getItem(KEY) || '[]');
+      checked.forEach(id => { const el = document.getElementById(id); if(el) el.checked = true; });
+      update();
+    }
+    function update() {
+      document.querySelectorAll('.item').forEach(item => {
+        item.classList.toggle('done', item.querySelector('input').checked);
+      });
+      const total = ids().length, done = document.querySelectorAll('input:checked').length;
+      document.getElementById('lbl').textContent = done + ' / ' + total;
+      document.getElementById('bar').style.width = (total ? done/total*100 : 0) + '%';
+    }
+    function reset() { document.querySelectorAll('input').forEach(i => i.checked = false); save(); }
+    load();
+  </script>
+</body>
+</html>''';
+  }
+
+  Future<void> _partager(List<Map<String, dynamic>> items) async {
+    final html = _genererHtml(items);
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/liste_courses.html');
+    await file.writeAsString(html);
+    await Share.shareXFiles([XFile(file.path)], subject: 'Ma liste de courses');
   }
 
   @override
@@ -117,10 +185,7 @@ class _ListeCoursesPageState extends State<ListeCoursesPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.share),
-            onPressed: () {
-              final texte = _construireTextePartage(allItems);
-              Share.share(texte, subject: 'Ma liste de courses');
-            },
+            onPressed: () => _partager(allItems),
           ),
         ],
       ),
