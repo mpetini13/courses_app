@@ -27,7 +27,6 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController _autreController = TextEditingController();
   TriRecettes _tri = TriRecettes.defaut;
   VueMode _vue = VueMode.grille;
-  List<Recette>? _ordreAleatoire;
 
   @override
   void initState() {
@@ -76,21 +75,104 @@ class _HomePageState extends State<HomePage> {
             return bNbCoches.compareTo(aNbCoches);
           });
       case TriRecettes.defaut:
-        return _ordreAleatoire ?? recettes;
+        return recettes;
     }
   }
 
   void _randomizer(List<Recette> recettes) {
-    final shuffled = [...recettes]..shuffle(Random());
-    setState(() {
-      _ordreAleatoire = shuffled;
-      _tri = TriRecettes.defaut;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Plats mélangés aléatoirement !'),
-        duration: Duration(seconds: 1),
-        backgroundColor: Colors.orange,
+    if (recettes.isEmpty) return;
+    Recette suggestion = recettes[Random().nextInt(recettes.length)];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setSheet) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text('Et si on faisait...', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+              ),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.asset(
+                  suggestion.image,
+                  height: 180,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    height: 180,
+                    color: Colors.orange.shade100,
+                    child: const Icon(Icons.restaurant, size: 60, color: Colors.orange),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                suggestion.nom,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+              ),
+              Text(
+                '${suggestion.ingredients.length} ingrédients',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+              ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          setSheet(() {
+                            suggestion = recettes[Random().nextInt(recettes.length)];
+                          });
+                        },
+                        icon: const Icon(Icons.shuffle, size: 16),
+                        label: const Text('Autre plat'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.orange,
+                          side: const BorderSide(color: Colors.orange),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _showIngredients(context, suggestion);
+                        },
+                        icon: const Icon(Icons.check, size: 16),
+                        label: const Text("C'est ce plat !"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -702,21 +784,34 @@ class _HomePageState extends State<HomePage> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         child: ListTile(
                           onTap: () => _showIngredients(context, recette),
-                          leading: Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: nbCochesRecette > 0 ? Colors.orange.shade700 : Colors.grey.shade300,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: nbCochesRecette > 0
-                                ? Center(
-                                    child: Text(
-                                      '$nbCochesRecette',
-                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
+                          leading: Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.asset(
+                                  recette.image,
+                                  width: 48,
+                                  height: 48,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    width: 48, height: 48,
+                                    decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(10)),
+                                    child: const Icon(Icons.restaurant, color: Colors.orange, size: 22),
+                                  ),
+                                ),
+                              ),
+                              if (nbCochesRecette > 0)
+                                Positioned(
+                                  right: 0, top: 0,
+                                  child: Container(
+                                    width: 18, height: 18,
+                                    decoration: BoxDecoration(color: Colors.orange.shade700, borderRadius: BorderRadius.circular(9), border: Border.all(color: Colors.white, width: 1.5)),
+                                    child: Center(
+                                      child: Text('$nbCochesRecette', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
                                     ),
-                                  )
-                                : const Icon(Icons.restaurant, color: Colors.white, size: 20),
+                                  ),
+                                ),
+                            ],
                           ),
                           title: Text(
                             recette.nom,
